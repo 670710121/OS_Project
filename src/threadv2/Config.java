@@ -1,3 +1,4 @@
+package threadv2;
 /**
  * ค่าที่รับมาจาก command line
  *

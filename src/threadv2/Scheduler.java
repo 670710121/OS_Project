@@ -1,3 +1,5 @@
+package threadv2;
+
 import java.util.concurrent.BlockingQueue;
 
 /**
