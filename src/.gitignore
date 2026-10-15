@@ -15,5 +15,6 @@ files/
 .DS_Store
 Thumbs.db
 
-src/zero_copy/downloads/downloaded_big.bin
+# Large binary test files
+src/downloads/downloaded_big.bin
 src/zero_copy/files/big.bin
