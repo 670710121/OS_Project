@@ -14,18 +14,18 @@ import java.util.concurrent.*;
  * Client: แบ่งไฟล์เป็นช่วง ๆ ดาวน์โหลดพร้อมกันด้วยหลาย worker แล้ว merge
  *
  * วิธีรัน:  java Client <ชื่อไฟล์> <io|nio> [จำนวน workers]
- * ตัวอย่าง:  javac zero_copy/*.java
+ * ตัวอย่าง: javac zero_copy/*.java
  *          java zero_copy/Server io
  *          java zero_copy/Server nio
  *          java zero_copy/Client big.bin io 10
  *          java zero_copy/Client big.bin nio 1
- *          fsutil file createnew zero_copy\shared\big.bin 524288000
+ *          fsutil file createnew zero_copy\files\big.bin 524288000
  */
 public class Client {
     static final String HOST = "localhost";
     static final int PORT = 5000;
-    static final Path OUT_DIR = Paths.get("downloads");   // ผลดาวน์โหลดไปอยู่ที่นี่
-    static final Path SRC_DIR = Paths.get("files");       // โฟลเดอร์ต้นทางที่ Server ใช้ (ต้องตรงกับ Server.DIR)
+    static final Path OUT_DIR = Paths.get("zero_copy", "downloads");   // ผลดาวน์โหลดไปอยู่ที่นี่
+    static final Path SRC_DIR = Paths.get("zero_copy", "files");       // โฟลเดอร์ต้นทางที่ Server ใช้ (ต้องตรงกับ Server.DIR)
     static final long TEST_FILE_SIZE = 100L * 1024 * 1024; // ขนาดไฟล์ทดสอบ 100 MB
 
     public static void main(String[] args) throws Exception {

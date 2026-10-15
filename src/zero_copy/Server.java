@@ -25,7 +25,7 @@ import java.util.stream.Stream;
  */
 public class Server {
     static final int PORT = 5000;
-    static final Path DIR = Paths.get("files");
+    static final Path DIR = Paths.get("zero_copy", "files");
     static boolean useNio = false;   // true = ใช้ NIO ตอนส่งข้อมูล
 
     public static void main(String[] args) throws IOException {
