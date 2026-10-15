@@ -14,13 +14,19 @@ import java.util.concurrent.*;
  * Client: แบ่งไฟล์เป็นช่วง ๆ ดาวน์โหลดพร้อมกันด้วยหลาย worker แล้ว merge
  *
  * วิธีรัน:  java Client <ชื่อไฟล์> <io|nio> [จำนวน workers]
- * ตัวอย่าง: java Client big.bin io 10
- *           java Client big.bin nio 1
+ * ตัวอย่าง:  javac zero_copy/*.java
+ *          java zero_copy/Server io
+ *          java zero_copy/Server nio
+ *          java zero_copy/Client big.bin io 10
+ *          java zero_copy/Client big.bin nio 1
+ *          fsutil file createnew zero_copy\shared\big.bin 524288000
  */
 public class Client {
     static final String HOST = "localhost";
     static final int PORT = 5000;
-    static final Path OUT_DIR = Paths.get("downloads");
+    static final Path OUT_DIR = Paths.get("downloads");   // ผลดาวน์โหลดไปอยู่ที่นี่
+    static final Path SRC_DIR = Paths.get("files");       // โฟลเดอร์ต้นทางที่ Server ใช้ (ต้องตรงกับ Server.DIR)
+    static final long TEST_FILE_SIZE = 100L * 1024 * 1024; // ขนาดไฟล์ทดสอบ 100 MB
 
     public static void main(String[] args) throws Exception {
         String name = args[0];
@@ -28,6 +34,7 @@ public class Client {
         int workers = args.length > 2 ? Integer.parseInt(args[2]) : 10;
 
         Files.createDirectories(OUT_DIR);
+        ensureTestFile(name);   // สร้างโฟลเดอร์ files และไฟล์ทดสอบให้ ถ้ายังไม่มี
 
         // ---------- ขั้น 1: ถาม Server (LIST + INFO) ----------
         long size = askServer(name);
@@ -73,6 +80,27 @@ public class Client {
         System.out.printf("Time = %.3f s, Throughput = %.2f MB/s%n", seconds, mb / seconds);
         System.out.println("Size check: " + (Files.size(finalFile) == size ? "OK" : "MISMATCH"));
         System.out.println("SHA-256   : " + sha256(finalFile));   // เอาไปเทียบกับ sha256sum ของไฟล์ต้นฉบับ
+    }
+
+    // สร้างโฟลเดอร์ files และไฟล์ทดสอบ (ข้อมูลสุ่ม) ถ้ายังไม่มี
+    // หมายเหตุ: ต้องรัน Client และ Server จากโฟลเดอร์เดียวกัน เพื่อให้ "files" เป็นที่เดียวกัน
+    static void ensureTestFile(String name) throws IOException {
+        Files.createDirectories(SRC_DIR);
+        Path file = SRC_DIR.resolve(name);
+        if (Files.exists(file)) return;                    // มีอยู่แล้ว ไม่ต้องสร้างซ้ำ
+
+        System.out.println("Creating test file " + file + " (" + (TEST_FILE_SIZE / (1024 * 1024)) + " MB)...");
+        java.util.Random rnd = new java.util.Random();
+        byte[] buf = new byte[64 * 1024];
+        try (OutputStream out = new BufferedOutputStream(new FileOutputStream(file.toFile()))) {
+            long left = TEST_FILE_SIZE;
+            while (left > 0) {
+                rnd.nextBytes(buf);
+                int n = (int) Math.min(buf.length, left);
+                out.write(buf, 0, n);
+                left -= n;
+            }
+        }
     }
 
     // ถามรายชื่อไฟล์ (LIST) และขนาดไฟล์ (INFO) ผ่าน connection แรก
