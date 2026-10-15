@@ -1,3 +1,5 @@
+package zero_copy;
+
 /**
  * CLIENT side: a small box that holds the result of one download.
  * It has only fields (no methods).

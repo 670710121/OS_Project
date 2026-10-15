@@ -1,4 +1,4 @@
-
+package thread;
 /**
  * ค่าที่รับมาจาก command line
  *

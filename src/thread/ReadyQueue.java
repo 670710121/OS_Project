@@ -1,3 +1,5 @@
+package thread;
+
 import java.util.Comparator;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
