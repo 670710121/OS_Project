@@ -492,14 +492,34 @@ public class TestRunner {
                 failedAndCleaned);
 
         // c) the exit code of the real Client program (it runs in a separate Java process)
-        check("Client exit code is 0 for a good download",
-                runClient(PORT, "download", "odd.bin", new File(outDir, "exit_ok.out").getPath(),
-                        "10", "nio") == 0);
+        int code0 = runClient(PORT, "download", "odd.bin", new File(outDir, "exit_ok.out").getPath(),
+                "10", "nio");
+        check("Client exit code is 0 for a good download", code0 == 0);
+        if (code0 != 0) {
+            showClientProblem(code0);
+        }
+        int code1 = runClient(PORT, "info", "nope.bin");
         check("Client exit code is 1 for an error (file not found)",
-                runClient(PORT, "info", "nope.bin") == 1);
-        check("Client exit code is 2 for a damaged download",
-                runClient(badServer.port(), "download", "x.bin",
-                        new File(outDir, "exit_bad.out").getPath(), "4", "io") == 2);
+                code1 == 1 && lastClientOutput.contains("Error:"));
+        int code2 = runClient(badServer.port(), "download", "x.bin",
+                new File(outDir, "exit_bad.out").getPath(), "4", "io");
+        check("Client exit code is 2 for a damaged download", code2 == 2);
+        if (code2 != 2) {
+            showClientProblem(code2);
+        }
+    }
+
+    // What the last separate Client process printed (shown when a check fails).
+    static String lastClientOutput = "";
+    static String lastClientCommand = "";
+
+    static void showClientProblem(int exitCode) {
+        out.println("      exit code was " + exitCode + ". The command was:");
+        out.println("      " + lastClientCommand);
+        out.println("      The Client printed:");
+        for (String line : lastClientOutput.split("\n")) {
+            out.println("      | " + line);
+        }
     }
 
     // Run the real Client program in a separate Java process and return its exit code.
@@ -516,10 +536,18 @@ public class TestRunner {
         }
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.redirectErrorStream(true);
-        builder.redirectOutput(ProcessBuilder.Redirect.DISCARD);      // we only need the exit code
+        File log = File.createTempFile("zc_client", ".log");
+        builder.redirectOutput(log);                     // keep the text, to show it if a check fails
+        lastClientCommand = String.join(" ", command);
         Process process = builder.start();
-        if (!process.waitFor(60, TimeUnit.SECONDS)) {
+        boolean finished = process.waitFor(60, TimeUnit.SECONDS);
+        if (!finished) {
             process.destroyForcibly();
+            process.waitFor();
+        }
+        lastClientOutput = new String(Files.readAllBytes(log.toPath()));
+        log.delete();
+        if (!finished) {
             return -1;                                   // the client did not finish: a failure
         }
         return process.exitValue();
