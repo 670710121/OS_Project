@@ -1,5 +1,4 @@
 package zero_copy;
-
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -13,6 +12,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import javax.tools.JavaCompiler;
+import javax.tools.ToolProvider;
 
 /**
  * Automatic test cases.   Run with:   java TestRunner
@@ -509,6 +510,57 @@ public class TestRunner {
         }
     }
 
+    // The class path for the separate Client process.
+    // Normally this is the same class path as ours. But if TestRunner was started straight from
+    // its source file (for example "java zero_copy/TestRunner.java", which newer Java versions
+    // allow), there is no Client.class on disk. Then we compile the .java files into a temporary
+    // folder and use that folder.
+    static String clientClassPath() throws Exception {
+        if (TestRunner.class.getResource("/Client.class") != null) {
+            return System.getProperty("java.class.path");
+        }
+        if (compiledFolder != null) {
+            return compiledFolder.getPath();
+        }
+        File source = findSourceFolder();
+        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        if (source == null || compiler == null) {
+            return System.getProperty("java.class.path");    // nothing better to try
+        }
+        File target = Files.createTempDirectory("zc_test_classes").toFile();
+        ArrayList<String> arguments = new ArrayList<String>();
+        arguments.add("-d");
+        arguments.add(target.getPath());
+        for (File f : source.listFiles()) {
+            if (f.getName().endsWith(".java")) {
+                arguments.add(f.getPath());
+            }
+        }
+        compiler.run(null, null, null, arguments.toArray(new String[0]));
+        compiledFolder = target;
+        return target.getPath();
+    }
+
+    static File compiledFolder = null;
+
+    // The folder with Client.java: the current folder, or one of its sub-folders.
+    static File findSourceFolder() {
+        File here = new File(".").getAbsoluteFile();
+        if (new File(here, "Client.java").isFile()) {
+            return here;
+        }
+        File[] children = here.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                if (child.isDirectory() && new File(child, "Client.java").isFile()
+                        && new File(child, "TestRunner.java").isFile()) {
+                    return child;
+                }
+            }
+        }
+        return null;
+    }
+
     // What the last separate Client process printed (shown when a check fails).
     static String lastClientOutput = "";
     static String lastClientCommand = "";
@@ -527,7 +579,7 @@ public class TestRunner {
         ArrayList<String> command = new ArrayList<String>();
         command.add(System.getProperty("java.home") + File.separator + "bin" + File.separator + "java");
         command.add("-cp");
-        command.add(System.getProperty("java.class.path"));
+        command.add(clientClassPath());
         command.add("Client");
         command.add(HOST);
         command.add(String.valueOf(port));
