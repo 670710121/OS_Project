@@ -8,6 +8,8 @@
 bin/
 out/
 target/
+downloads/
+files/
 
 # OS files
 .DS_Store
