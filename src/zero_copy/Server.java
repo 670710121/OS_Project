@@ -1,88 +1,173 @@
-package zero_copy;
-
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.net.InetSocketAddress;
+import java.nio.channels.FileChannel;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.file.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Stream;
 
 /**
- * The SERVER: main program.
- * It only waits for clients. Every client that connects is given to a THREAD POOL
- * (a fixed group of threads that are created once and re-used). A free thread runs a
- * ClientHandler that talks to that client, so many clients are served at the same time.
- * If all threads are busy, the new client waits in the pool's queue until one is free.
+ * Server: ส่งไฟล์ให้ Client ตามช่วง byte ที่ขอ
  *
- * Run:  java Server [port] [folder]        (default: port 5000, folder "shared")
+ * วิธีรัน:  java Server io    (ส่งข้อมูลแบบ Traditional I/O)
+ *           java Server nio   (ส่งข้อมูลแบบ NIO transferTo)
+ * ไฟล์ที่ให้ดาวน์โหลดต้องวางไว้ในโฟลเดอร์ "files"
+ *
+ * Protocol (ข้อความส่งด้วย writeUTF / อ่านด้วย readUTF):
+ *   LIST                       -> FILE <name> <size> (หลายบรรทัด) แล้วปิดด้วย END
+ *   INFO <name>                -> SIZE <bytes>  หรือ  ERROR <code> <message>
+ *   GET <name> <offset> <len>  -> OK <len> แล้วตามด้วย payload ดิบ <len> bytes
+ *                                 หรือ ERROR <code> <message>
+ * (ชื่อไฟล์ห้ามมีช่องว่าง)
  */
 public class Server {
-
-    // The most connections that are served at the same time.
-    // A client with 10 workers uses 10 of them, so 100 is enough for several clients.
-    static final int POOL_SIZE = 100;
+    static final int PORT = 5000;
+    static final Path DIR = Paths.get("files");
+    static boolean useNio = false;   // true = ใช้ NIO ตอนส่งข้อมูล
 
     public static void main(String[] args) throws IOException {
-        // 1) read the settings from the command line (or use the defaults)
-        int port = Protocol.DEFAULT_PORT;
-        String folderName = "shared";
-        if (args.length > 0) {
-            try {
-                port = Integer.parseInt(args[0]);
-            } catch (NumberFormatException e) {
-                System.err.println("The port must be a number, for example 5000 (not \""
-                        + args[0] + "\")");
-                System.exit(1);
-            }
-        }
-        if (port < 1 || port > 65535) {
-            System.err.println("The port must be between 1 and 65535 (not " + port + ")");
-            System.exit(1);
-        }
-        if (args.length > 1) {
-            folderName = args[1];
-        }
+        useNio = args.length > 0 && args[0].equalsIgnoreCase("nio");
 
-        File folder = new File(folderName).getCanonicalFile();
-        if (!folder.isDirectory()) {
-            System.err.println("Directory not found: " + folder);
-            System.exit(1);                      // exit code 1 = error (so a script can notice)
-        }
+        // Thread Pool: มี thread ทำงานพร้อมกันได้สูงสุด 20 ตัว
+        // (Client 10 workers = 10 connection ต่อ 1 การดาวน์โหลด)
+        ExecutorService pool = Executors.newFixedThreadPool(20);
 
-        // 2) open the port
-        ServerSocketChannel serverChannel = ServerSocketChannel.open();
-        try {
-            serverChannel.bind(new InetSocketAddress(port));
-        } catch (IOException e) {
-            System.err.println("Cannot open port " + port + ": " + e.getMessage()
-                    + "   (is another server already running on this port?)");
-            System.exit(1);
-        }
-        System.out.println("[server] listening on port " + port + ", sharing folder: " + folder);
+        // ใช้ ServerSocketChannel เพราะ NIO transferTo ต้องใช้ SocketChannel
+        ServerSocketChannel server = ServerSocketChannel.open();
+        server.bind(new InetSocketAddress(PORT));
+        System.out.println("Server started on port " + PORT + " mode=" + (useNio ? "NIO" : "Traditional I/O"));
 
-        // 3) loop forever: accept a client and give it to the thread pool
-        ExecutorService pool = Executors.newFixedThreadPool(POOL_SIZE);
         while (true) {
-            SocketChannel client = null;
-            try {
-                client = serverChannel.accept();             // waits here until a client connects
-            } catch (IOException e) {
-                // For example "Too many open files". One failed accept must not stop the
-                // whole server: we write a message, wait a moment and try again.
-                System.out.println("[server] accept failed: " + e.getMessage());
-                pause(100);
-                continue;
-            }
-            pool.execute(new ClientHandler(client, folder));  // a free pool thread runs handler.run()
+            SocketChannel client = server.accept();      // รอ Client ต่อเข้ามา (1 connection)
+            pool.submit(() -> handleClient(client));     // โยนให้ thread ใน pool ไปดูแล
         }
     }
 
-    private static void pause(int milliseconds) {
-        try {
-            Thread.sleep(milliseconds);
-        } catch (InterruptedException e) {
-            // nothing to do
+    // thread ใน pool 1 ตัวดูแล 1 connection: อ่านคำสั่ง -> ตอบกลับ วนไปจนกว่า Client จะปิด
+    static void handleClient(SocketChannel ch) {
+        try (ch) {
+            DataInputStream in = new DataInputStream(ch.socket().getInputStream());
+            DataOutputStream out = new DataOutputStream(ch.socket().getOutputStream());
+
+            while (true) {
+                String line;
+                try {
+                    line = in.readUTF();                 // อ่านคำสั่งหนึ่งบรรทัด
+                } catch (EOFException e) {
+                    break;                               // Client ปิด connection แล้ว
+                }
+                String[] p = line.split(" ");
+
+                if (p[0].equals("LIST")) {
+                    doList(out);
+                } else if (p[0].equals("INFO") && p.length == 2) {
+                    doInfo(p[1], out);
+                } else if (p[0].equals("GET") && p.length == 4) {
+                    doGet(p[1], p[2], p[3], ch, out);
+                } else {
+                    out.writeUTF("ERROR 400 Bad request");
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("Connection error: " + e.getMessage());
         }
+    }
+
+    // LIST: ส่งรายชื่อไฟล์ + ขนาด
+    static void doList(DataOutputStream out) throws IOException {
+        try (Stream<Path> files = Files.list(DIR)) {
+            for (Path f : (Iterable<Path>) files.filter(Files::isRegularFile)::iterator) {
+                out.writeUTF("FILE " + f.getFileName() + " " + Files.size(f));
+            }
+        }
+        out.writeUTF("END");
+    }
+
+    // INFO: ส่งขนาดไฟล์
+    static void doInfo(String name, DataOutputStream out) throws IOException {
+        Path file = findFile(name);
+        if (file == null) {
+            out.writeUTF("ERROR 404 File not found");
+        } else {
+            out.writeUTF("SIZE " + Files.size(file));
+        }
+    }
+
+    // GET: ส่งข้อมูลเฉพาะช่วง [offset, offset+length)
+    static void doGet(String name, String offStr, String lenStr,
+                      SocketChannel ch, DataOutputStream out) throws IOException {
+        Path file = findFile(name);
+        if (file == null) {
+            out.writeUTF("ERROR 404 File not found");
+            return;
+        }
+
+        long offset, length;
+        try {
+            offset = Long.parseLong(offStr);
+            length = Long.parseLong(lenStr);
+        } catch (NumberFormatException e) {
+            out.writeUTF("ERROR 400 Offset/length must be numbers");
+            return;
+        }
+
+        // ตรวจว่าช่วงที่ขอต้องอยู่ในไฟล์
+        if (offset < 0 || length < 0 || offset + length > Files.size(file)) {
+            out.writeUTF("ERROR 416 Invalid range");
+            return;
+        }
+
+        out.writeUTF("OK " + length);    // บอก Client ก่อนว่าจะส่ง payload กี่ byte
+        out.flush();
+
+        if (useNio) {
+            sendWithNio(file, offset, length, ch);
+        } else {
+            sendWithTraditionalIO(file, offset, length, out);
+        }
+    }
+
+    // ---------- วิธีที่ 1: Traditional I/O ----------
+    // อ่านไฟล์เข้า byte[] (หน่วยความจำของ Java) แล้วค่อยเขียนลง socket
+    // ข้อมูลถูกก๊อปปี้หลายรอบ: disk -> kernel -> byte[] -> kernel(socket) -> network
+    static void sendWithTraditionalIO(Path file, long offset, long length, OutputStream out)
+            throws IOException {
+        try (RandomAccessFile raf = new RandomAccessFile(file.toFile(), "r")) {
+            raf.seek(offset);                                   // ข้ามไปที่ offset
+            byte[] buf = new byte[64 * 1024];
+            long left = length;                                 // เหลืออีกกี่ byte
+            while (left > 0) {
+                int n = raf.read(buf, 0, (int) Math.min(buf.length, left));
+                if (n < 0) break;                               // จบไฟล์
+                out.write(buf, 0, n);
+                left -= n;
+            }
+            out.flush();
+        }
+    }
+
+    // ---------- วิธีที่ 2: NIO transferTo ----------
+    // สั่งให้ OS ส่งจากไฟล์ไป socket โดยตรง (zero-copy) ไม่ต้องผ่าน byte[] ใน Java
+    static void sendWithNio(Path file, long offset, long length, SocketChannel ch)
+            throws IOException {
+        try (FileChannel fc = FileChannel.open(file, StandardOpenOption.READ)) {
+            long pos = offset;
+            long left = length;
+            while (left > 0) {
+                long n = fc.transferTo(pos, left, ch);          // อาจส่งได้น้อยกว่าที่ขอ จึงต้องวน
+                if (n <= 0) break;
+                pos += n;
+                left -= n;
+            }
+        }
+    }
+
+    // หาไฟล์ในโฟลเดอร์ files (กันชื่อแปลก ๆ เช่น ../secret.txt)
+    static Path findFile(String name) {
+        if (!Paths.get(name).getFileName().toString().equals(name)) return null;
+        Path f = DIR.resolve(name);
+        return Files.isRegularFile(f) ? f : null;
     }
 }
