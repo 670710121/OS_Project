@@ -40,7 +40,8 @@ public class ResourceManager {
     public ResourceManager(int printerPermits, int databasePermits) {
         this.printerPermits = printerPermits;
         this.databasePermits = databasePermits;
-        this.printerSemaphore = new Semaphore(printerPermits, true);
+        this.printerSemaphore = new Semaphore(printerPermits, true); 
+        // true คือ fairness ให้แจก permit ให้ thread ที่มาขอตาม fcfs
         this.databaseSemaphore = new Semaphore(databasePermits, true);
     }
 

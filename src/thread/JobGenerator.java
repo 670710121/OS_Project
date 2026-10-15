@@ -44,36 +44,36 @@ public class JobGenerator extends Thread {
     private final List<Job> jobsByArrival;
     private final BlockingQueue<Job> arrivalQueue;
     private final ProjectLogger logger;
-
+ 
     public JobGenerator(List<Job> jobs, BlockingQueue<Job> arrivalQueue, ProjectLogger logger) {
-        super("generator");
+        super("generator"); //สืบทอดมาแต่ชื่อ thread นี้จะชื่อ generator
         // ทำสำเนาแล้ว sort ตาม arrivalMs โดยไม่แก้ไข list เดิมที่ Main ถืออยู่
         // (list เดิมต้องคงลำดับตามไฟล์ไว้ให้ Statistics/summary ใช้ทีหลัง)
-        this.jobsByArrival = new ArrayList<>(jobs);
-        this.jobsByArrival.sort(Comparator.comparingLong(job -> job.arrivalMs));
-        this.arrivalQueue = arrivalQueue;
+        this.jobsByArrival = new ArrayList<>(jobs); //มาจาก csv -> WorkloadLoader -> JobGenerator
+        this.jobsByArrival.sort(Comparator.comparingLong(job -> job.arrivalMs)); //sort arrivalMs น้อย-มาก
+        this.arrivalQueue = arrivalQueue; //งานที่ถูกสร้างขึ้นแล้วพักไว้ แต่กำลังรอให้ Schedulerเอาไปทำต่อ
         this.logger = logger;
     }
 
+    //จัดเวลารอ
     @Override
     public void run() {
         try {
             for (Job job : jobsByArrival) {
-                long waitMs = job.arrivalMs - logger.now();
+                long waitMs = job.arrivalMs - logger.now(); //logger.now() = เวลาปัจจุบันของระบบจำลอง
                 if (waitMs > 0) {
-                    Thread.sleep(waitMs);
+                    Thread.sleep(waitMs); // Thread.sleep() ไม่รับประกันว่าจะตื่นตรงเวลาพอดี ระบบปฏิบัติการอาจปลุก Thread ช้ากว่าเวลาที่กำหนดได้
                 }
 
                 // บันทึกเวลาที่เข้าสู่ระบบ "จริง" ซึ่งอาจต่างจาก arrivalMs
                 // เล็กน้อยเพราะ Thread ถูกปลุกช้าได้ (ห้ามใช้ arrivalMs ตรง ๆ)
-                job.setActualArrivalMs(logger.now());
-                logger.jobArrived(job);
+                job.setActualArrivalMs(logger.now()); // setเวลาปัจจุบันลงใน Job เพื่อเก็บเวลาที่มาถึงจริง
+                logger.jobArrived(job); // แจ้ง logger ให้บันทึกเหตุการณ์ว่า Job นี้มาถึงแล้ว
 
-                arrivalQueue.put(job);
+                arrivalQueue.put(job); // Job ใส่ arrivalQueue เพื่อให้ Scheduler ดึงไปทำงานต่อ
             }
 
-            // ปล่อยงานครบทุกชิ้นแล้ว ส่งสัญญาณให้ Scheduler รู้ว่าจะไม่มี
-            // งานใหม่เข้ามาอีก
+            // ปล่อยงานครบทุกชิ้นแล้ว ส่งสัญญาณให้ Scheduler รู้ว่าจะไม่มีงานใหม่เข้ามาอีก
             arrivalQueue.put(ReadyQueue.POISON_PILL);
         } catch (InterruptedException e) {
             // ถูกสั่งหยุดกลางทาง (เช่นตอน error shutdown) ให้รักษาสถานะ

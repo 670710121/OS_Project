@@ -55,10 +55,10 @@ public class Statistics {
     public void printSummary(List<Job> allJobs, long makespanMs) {
         int jobCount = allJobs.size();
 
-        long totalWaiting = 0;
-        long totalTurnaround = 0;
-        long totalResourceWait = 0;
-        int resourceJobCount = 0;
+        long totalWaiting = 0; //เวลารอคิวรวมของทุก Job ใน Ready Queue
+        long totalTurnaround = 0; //Turnaround Time รวมของทุก Job เวลาตั้งแต่ Job มาถึงระบบ จนกระทั่ง Job ทำงานเสร็จ
+        long totalResourceWait = 0; //เวลารอ Resource รวม
+        int resourceJobCount = 0; //จำนวน Job ที่ต้องใช้ Resource
 
         for (Job job : allJobs) {
             totalWaiting += job.waitingTimeMs();
@@ -77,6 +77,7 @@ public class Statistics {
         // makespanMs เป็นหน่วย ms จึงหารด้วย 1000.0 เพื่อแปลงเป็นวินาที
         double throughput = makespanMs <= 0 ? 0.0
                 : completed.get() / (makespanMs / 1000.0);
+        //เวลารวมตั้งแต่เริ่มต้นการทำงานของระบบ จนกระทั่ง Job สุดท้ายทำงานเสร็จ
 
         System.out.println();
         System.out.println("===== Summary =====");

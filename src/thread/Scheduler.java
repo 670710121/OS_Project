@@ -35,8 +35,8 @@ import java.util.concurrent.BlockingQueue;
  */
 public class Scheduler extends Thread {
 
-    private final BlockingQueue<Job> arrivalQueue;
-    private final ReadyQueue readyQueue;
+    private final BlockingQueue<Job> arrivalQueue; //มาจาก jobgenerator
+    private final ReadyQueue readyQueue; // file readyqueue
     private final ProjectLogger logger;
     private final int workerCount;
 
@@ -51,7 +51,7 @@ public class Scheduler extends Thread {
      */
     public Scheduler(BlockingQueue<Job> arrivalQueue, ReadyQueue readyQueue,
                       ProjectLogger logger, int workerCount) {
-        super("scheduler");
+        super("scheduler"); // thread ชืี่อ scheduler
         this.arrivalQueue = arrivalQueue;
         this.readyQueue = readyQueue;
         this.logger = logger;
@@ -68,12 +68,14 @@ public class Scheduler extends Thread {
                     // JobGenerator ปล่อยงานครบทุกชิ้นแล้ว ไม่มีงานใหม่เข้ามาอีก
                     // ส่งสัญญาณให้ Worker ทุกตัวหยุด คนละหนึ่ง pill
                     for (int i = 0; i < workerCount; i++) {
-                        readyQueue.add(ReadyQueue.POISON_PILL);
+                        readyQueue.add(ReadyQueue.POISON_PILL); 
+                        //thread แต่ละตัวใช้ readyQueue ตัวเดียวกัน เพราะงั้นทุกตัวจะโดนpoisonpillแน่นอน เพราะ take()ทีละตัว
+                        //เช่น มี 3 thread เพิ่ม 3 poisonpill ท้าย queue->break ตัวแรกใช้->เจอ->หยุด ตัว2->เจอ->หยุด ตัว3->เจอ->หยุด
                     }
                     break;
                 }
 
-                readyQueue.add(job);
+                readyQueue.add(job);//เอางานจาก arrivalQueue ที่มาจาก jobgenerator ใส่ 
             }
         } catch (InterruptedException e) {
             // ถูกสั่งหยุดกลางทาง (เช่นตอน error shutdown) รักษาสถานะ

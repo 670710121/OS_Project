@@ -53,11 +53,11 @@ public class Worker extends Thread {
         return RUNNING.get();
     }
 
-    private final ReadyQueue readyQueue;
-    private final ResourceManager resources;
-    private final Statistics statistics;
+    private final ReadyQueue readyQueue; // scheduler -> readyqueue
+    private final ResourceManager resources; // ResourceManager -> resourcetype
+    private final Statistics statistics; 
     private final ProjectLogger logger;
-    private final CountDownLatch allJobsDone;
+    private final CountDownLatch allJobsDone; //ให้ Thread หนึ่งรอจนกว่าเหตุการณ์หรือขั้นตอนที่กำหนดจะเสร็จสิ้น โดยใช้ตัวนับที่ลดลงเรื่อยๆ จนถึง 0
 
     public Worker(String name, ReadyQueue readyQueue, ResourceManager resources,
                   Statistics statistics, ProjectLogger logger, CountDownLatch allJobsDone) {
@@ -92,7 +92,7 @@ public class Worker extends Thread {
 
     /** ทำงานหนึ่งชิ้นให้จบตามลำดับ 5 ขั้นด้านบน */
     private void processJob(Job job) throws InterruptedException {
-        RUNNING.incrementAndGet();
+        RUNNING.incrementAndGet(); //+1 ตามจำนวน thread ที่กำลังทำ
         try {
             // ----- ขั้น 1: รับงานแล้วบันทึกเวลาเริ่ม -----
             job.setStartMs(logger.now());
@@ -131,7 +131,7 @@ public class Worker extends Thread {
             logger.jobCompleted(job);
             statistics.recordCompletion(job);
         } finally {
-            RUNNING.decrementAndGet();
+            RUNNING.decrementAndGet(); // -1 ตามจำนวน thread ทำเสร็จแล้ว
             // countDown() ต้องอยู่นอก try ของงานนี้ (แต่ยังอยู่ใน finally
             // ของ processJob) เพื่อให้ Main รับรู้ว่างานชิ้นนี้ "จบการประมวลผล
             // แล้ว" ไม่ว่าจะจบแบบสำเร็จหรือถูก interrupt กลางทางก็ตาม
