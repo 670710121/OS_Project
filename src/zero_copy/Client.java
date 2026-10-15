@@ -24,8 +24,8 @@ import java.util.concurrent.*;
 public class Client {
     static final String HOST = "localhost";
     static final int PORT = 5000;
-    static final Path OUT_DIR = Paths.get("zero_copy", "downloads");   // ผลดาวน์โหลดไปอยู่ที่นี่
-    static final Path SRC_DIR = Paths.get("zero_copy", "files");       // โฟลเดอร์ต้นทางที่ Server ใช้ (ต้องตรงกับ Server.DIR)
+    static final Path OUT_DIR = Paths.get("zero_copy/downloads");   // ผลดาวน์โหลดไปอยู่ที่นี่
+    static final Path SRC_DIR = Paths.get("zero_copy/files");       // โฟลเดอร์ต้นทางที่ Server ใช้ (ต้องตรงกับ Server.DIR)
     static final long TEST_FILE_SIZE = 100L * 1024 * 1024; // ขนาดไฟล์ทดสอบ 100 MB
 
     public static void main(String[] args) throws Exception {
