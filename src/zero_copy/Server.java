@@ -24,15 +24,22 @@ import java.util.stream.Stream;
  * (ชื่อไฟล์ห้ามมีช่องว่าง)
  */
 public class Server {
+<<<<<<< HEAD
     static final int PORT = 5000;
     static final Path DIR = Paths.get("zero_copy/files");
+=======
+    static final int PORT = 5003;
+    static final Path DIR = Paths.get("files");// Server จะค้นหาไฟล์ในโฟลเดอร์ชื่อ files ที่อ้างอิงจากตำแหน่งที่คุณใช้ Run โปรแกรม
+>>>>>>> 335a319 (Update Client and Server)
     static boolean useNio = false;   // true = ใช้ NIO ตอนส่งข้อมูล
 
     public static void main(String[] args) throws IOException {
-        useNio = args.length > 0 && args[0].equalsIgnoreCase("nio");
-
+        useNio = args.length > 0 && args[0].equalsIgnoreCase("nio");//อ่าน argument ตอนรัน ถ้าพิมพ์ java Server nio จะได้ true ถ้าพิมพ์ io หรือไม่พิมพ์อะไรจะเป็น
+        
         // Thread Pool: มี thread ทำงานพร้อมกันได้สูงสุด 20 ตัว
-        // (Client 10 workers = 10 connection ต่อ 1 การดาวน์โหลด)
+        // (Client 10 workers = 10 connection ต่อ 1 การดาวน์โหลด) 
+        // Client เป็นคนกำหนดว่าจะส่งคนมาช่วยดาวน์โหลดกี่คน ส่วน Server เตรียมคนไว้รับงานกี่คน
+        // ดังนั้น ไม่จำเป็นต้องตั้งจำนวนเท่ากัน และ workers = 10 ไม่ได้หมายความว่า Server ต้องมีแค่ 10 threads เสมอไป
         ExecutorService pool = Executors.newFixedThreadPool(20);
 
         // ใช้ ServerSocketChannel เพราะ NIO transferTo ต้องใช้ SocketChannel
