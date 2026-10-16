@@ -77,6 +77,10 @@ public class Main {
         for (int i = 0; i < config.workers; i++) {
             workers[i] = new Worker("worker-" + (i + 1), readyQueue, resources,
                     statistics, logger, allJobsDone);
+            //worker ชื่อ worker-0 ... worker-i
+            //มี worker ทั้งหมด i ตัว
+            //new Worker("worker-1", readyQueue, resources, ...);
+            //new Worker("worker-2", readyQueue, resources, ...);
         }
  
         Scheduler scheduler = new Scheduler(arrivalQueue, readyQueue, logger, config.workers);
@@ -88,7 +92,7 @@ public class Main {
         // (Worker ที่ start ก่อนแล้วยังไม่มีงานก็แค่ block อยู่ใน readyQueue.take()
         // ไม่กิน CPU เหมือนกับที่ ReadyQueue.java อธิบายไว้)
         for (Worker w : workers) {
-            w.start();
+            w.start();//เริ่ม worker
         }
         scheduler.start();
         monitor.start();
@@ -114,7 +118,7 @@ public class Main {
         // รอจน Worker เรียก countDown() ครบ jobs.size() ครั้ง คือรู้แน่ชัดว่า
         // งานชิ้นสุดท้ายทำเสร็จจริงแล้ว (ไม่ใช่แค่ "ไม่มีงานใหม่เข้ามา")
         try {
-            allJobsDone.await();
+            allJobsDone.await(); //CountDownLatch count จนเหลือ 0
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -129,10 +133,13 @@ public class Main {
         // แปลว่างานจริงทุกชิ้นเสร็จ ดังนั้น Thread เหล่านี้ต้องกำลังจะจบหรือ
         // จบไปแล้วเช่นกัน เหลือแค่ Monitor ที่ไม่ได้อ่านจากคิวงาน
         // จึงต้องสั่ง interrupt เองเพื่อสะดุด Thread.sleep(1000) ใน run()
-        monitor.interrupt();
+        monitor.interrupt(); //หากไม่มีคำสั่งหยุด Monitor ก็อาจวนลูปต่อไป แม้ Jobs ทั้งหมดจะเสร็จแล้วก็ตาม
+        //ทำตามรอบ 1000L ไม่ได้หยุดเอง
  
         // join ทุก Thread เพื่อยืนยันว่าหยุดจริงก่อนพิมพ์สรุปผล
         // (กัน JVM ค้างเพราะมี Thread ไม่ใช่ daemon เหลืออยู่)
+        
+        //join() หมายถึง ให้ Thread ปัจจุบันรอจนกว่า Thread เป้าหมายจะจบการทำงาน
         try {
             generator.join();
             scheduler.join();
