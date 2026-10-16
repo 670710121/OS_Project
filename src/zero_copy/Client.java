@@ -14,7 +14,7 @@ import java.util.concurrent.*;
  * Client: แบ่งไฟล์เป็นช่วง ๆ ดาวน์โหลดพร้อมกันด้วยหลาย worker แล้ว merge
  *
  * วิธีรัน:  java Client <ชื่อไฟล์> <io|nio> [จำนวน workers]
- * ตัวอย่าง: javac zero_copy/*.java
+ * ตัวอย่าง:  javac zero_copy/*.java
  *          java zero_copy/Server io
  *          java zero_copy/Server nio
  *          java zero_copy/Client big.bin io 10
